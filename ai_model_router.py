@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
 import argparse
+import sys
 
 class Model(Enum):
     GPT_5_4 = "GPT-5.4"
@@ -22,11 +23,11 @@ class ModelInfo:
     multimodal: list[str]
 
 MODELS = {
-    Model.GPT_5_4: ModelInfo("GPT-5.4", 2.50, 15.00, 1000, 6.0, "Média", ["texto", "imagem", "computer_use"]),
+    Model.GPT_5_4: ModelInfo("GPT-5.4", 2.50, 15.00, 1000, 6.0, "Média", ["texto", "imagem", "computer_vision"]),
     Model.GEMINI_3_1_PRO: ModelInfo("Gemini 3.1 Pro", 2.00, 12.00, 2000, 9.0, "Média", ["texto", "imagem", "vídeo", "áudio"]),
-    Model.CLAUDE_SONNET_4_6: ModelInfo("Claude Sonnet 4.6", 3.00, 15.00, 200, 4.0, "Média", ["texto", "imagem", "computer_use"]),
+    Model.CLAUDE_SONNET_4_6: ModelInfo("Claude Sonnet 4.6", 3.00, 15.00, 200, 4.0, "Média", ["texto", "imagem", "computer_vision"]),
     Model.KIMI_K2_6: ModelInfo("Kimi K2.6", 1.20, 4.00, 256, None, "Média", ["texto", "imagem", "vídeo"]),
-    Model.NEMOTRON_3_ULTRA: ModelInfo("Nemotron 3 Ultra", 0.00, 0.00, 1000, None, "Muito rápida", ["texto"]),
+    Model.NEMOTRON_3_ULTRA: ModelInfo("Nemotron 3 Ultra", 0.20, 0.50, 1000, None, "Muito rápida", ["texto"]),
 }
 
 TASKS = {
@@ -115,28 +116,43 @@ def main():
     parser.add_argument("--output", type=int, default=5000, help="Tokens de saída estimados")
     args = parser.parse_args()
 
-    task_desc = " ".join(args.task)
-    matched, ranking = analyze_task(task_desc)
-    top_model, top_score = ranking[0]
-    info = MODELS[top_model]
+    # Validação de tokens
+    if args.input < 0 or args.output < 0:
+        print("❌ Erro: Tokens não podem ser negativos", file=sys.stderr)
+        sys.exit(1)
 
-    print("\n=== RECOMENDAÇÃO ===")
-    print("Tarefa:", task_desc)
-    print("Categorias detectadas:", ", ".join(matched))
-    print("Melhor modelo:", top_model.value)
-    print("Pontuação:", top_score)
-    print("Contexto:", f"{info.context_window_k}K")
-    print("Velocidade:", info.speed_tier)
-    print("Multimodalidade:", ", ".join(info.multimodal))
-    if info.hallucination_rate is not None:
-        print("Alucinação estimada:", f"{info.hallucination_rate}%")
+    # Validação de descrição da tarefa
+    task_desc = " ".join(args.task).strip()
+    if not task_desc:
+        print("❌ Erro: Descrição da tarefa não pode estar vazia", file=sys.stderr)
+        sys.exit(1)
 
-    cost = estimate_cost(top_model, args.input, args.output)
-    print("Custo estimado:", f"${cost:.4f}")
+    try:
+        matched, ranking = analyze_task(task_desc)
+        top_model, top_score = ranking[0]
+        info = MODELS[top_model]
 
-    print("\n=== RANKING ===")
-    for model, score in ranking:
-        print(f"{model.value}: {score}")
+        print("\n=== RECOMENDAÇÃO ===")
+        print("Tarefa:", task_desc)
+        print("Categorias detectadas:", ", ".join(matched))
+        print("Melhor modelo:", top_model.value)
+        print("Pontuação:", top_score)
+        print("Contexto:", f"{info.context_window_k}K")
+        print("Velocidade:", info.speed_tier)
+        print("Multimodalidade:", ", ".join(info.multimodal))
+        if info.hallucination_rate is not None:
+            print("Alucinação estimada:", f"{info.hallucination_rate}%")
+
+        cost = estimate_cost(top_model, args.input, args.output)
+        print("Custo estimado:", f"${cost:.4f}")
+
+        print("\n=== RANKING ===")
+        for model, score in ranking:
+            print(f"{model.value}: {score}")
+
+    except Exception as e:
+        print(f"❌ Erro ao processar: {str(e)}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
